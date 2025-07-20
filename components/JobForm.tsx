@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { calculateDistance, calculateFuelCost, formatTime, calculateWorkHours } from '@/lib/utils'
 import { Site, Job } from '@/lib/types'
 
@@ -17,13 +16,12 @@ export default function JobForm() {
   const [fuelPrice, setFuelPrice] = useState(1.5)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [useLocalStorage, setUseLocalStorage] = useState(false)
   const [localJobs, setLocalJobs] = useState<Job[]>([])
   const [localSites, setLocalSites] = useState<Site[]>([])
 
   useEffect(() => {
     getCurrentLocation()
-    testSupabaseConnection()
+    testLocalStorageConnection()
     fetchSites()
     
     // Load local data if available
@@ -33,25 +31,17 @@ export default function JobForm() {
     if (savedSites) setLocalSites(JSON.parse(savedSites))
   }, [])
 
-  const testSupabaseConnection = async () => {
+  const testLocalStorageConnection = () => {
     try {
-      console.log('Testing Supabase connection...')
-      const { data, error } = await supabase
-        .from('sites')
-        .select('count')
-        .limit(1)
-      
-      if (error) {
-        console.error('Supabase connection test failed:', error)
-        setMessage(`Database connection failed: ${error.message}`)
-        setUseLocalStorage(true) // Fallback to local storage
-      } else {
-        console.log('Supabase connection successful')
-      }
+      console.log('Testing Local Storage connection...')
+      const testKey = 'test-key'
+      localStorage.setItem(testKey, 'test-value')
+      localStorage.removeItem(testKey)
+      console.log('Local Storage connection successful')
     } catch (error) {
-      console.error('Supabase connection test error:', error)
-      setMessage(`Network error: ${error instanceof Error ? error.message : 'Failed to connect to database'}`)
-      setUseLocalStorage(true) // Fallback to local storage
+      console.error('Local Storage connection test failed:', error)
+      setMessage('Local Storage connection failed. Please check browser console for details.')
+      // Fallback to local storage
     }
   }
 
@@ -74,28 +64,15 @@ export default function JobForm() {
 
   const fetchSites = async () => {
     try {
-      console.log('Fetching sites from Supabase...')
-      const { data, error } = await supabase
-        .from('sites')
-        .select('*')
-        .order('first_visited', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching sites:', error)
-        setMessage(`Error fetching sites: ${error.message}`)
-        // Use local storage as fallback
-        setNearbySites(localSites)
-        setUseLocalStorage(true)
-      } else {
-        console.log('Sites fetched successfully:', data)
-        setNearbySites(data || [])
-      }
+      console.log('Fetching sites from Local Storage...')
+      const allSites = localSites
+      setNearbySites(allSites)
+      console.log('Sites fetched successfully:', allSites)
     } catch (error) {
       console.error('Error fetching sites:', error)
       setMessage(`Error fetching sites: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // Use local storage as fallback
       setNearbySites(localSites)
-      setUseLocalStorage(true)
     }
   }
 
@@ -172,52 +149,27 @@ export default function JobForm() {
 
       const fuelCost = calculateFuelCost(travelKm, fuelEfficiency, fuelPrice)
 
-      // Check if we should use local storage (either explicitly set or if job has local ID format)
-      const shouldUseLocal = useLocalStorage || currentJob.id.includes('-')
-
-      if (shouldUseLocal) {
-        // Update job in local storage
-        const updatedJobs = localJobs.map(job => 
-          job.id === currentJob.id 
-            ? {
-                ...job,
-                end_time: endTime.toISOString(),
-                travel_km: travelKm,
-                travel_time: workHours,
-                fuel_cost: fuelCost,
-                work_summary: workSummary,
-              }
-            : job
-        )
-        setLocalJobs(updatedJobs)
-        localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
-        
-        setIsJobActive(false)
-        setCurrentJob(null)
-        setSelectedSite(null)
-        setWorkSummary('')
-        setMessage('Job ended successfully! (Local mode)')
-      } else {
-        // Use Supabase
-        const { error } = await supabase
-          .from('jobs')
-          .update({
-            end_time: endTime.toISOString(),
-            travel_km: travelKm,
-            travel_time: workHours,
-            fuel_cost: fuelCost,
-            work_summary: workSummary,
-          })
-          .eq('id', currentJob.id)
-
-        if (error) throw error
-
-        setIsJobActive(false)
-        setCurrentJob(null)
-        setSelectedSite(null)
-        setWorkSummary('')
-        setMessage('Job ended successfully!')
-      }
+      // Always use local storage
+      const updatedJobs = localJobs.map(job => 
+        job.id === currentJob.id 
+          ? {
+              ...job,
+              end_time: endTime.toISOString(),
+              travel_km: travelKm,
+              travel_time: workHours,
+              fuel_cost: fuelCost,
+              work_summary: workSummary,
+            }
+          : job
+      )
+      setLocalJobs(updatedJobs)
+      localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
+      
+      setIsJobActive(false)
+      setCurrentJob(null)
+      setSelectedSite(null)
+      setWorkSummary('')
+      setMessage('Job ended successfully! (Local mode)')
     } catch (error) {
       console.error('Error ending job:', error)
       setMessage(`Error ending job: ${error instanceof Error ? error.message : 'Unknown error'}`)
