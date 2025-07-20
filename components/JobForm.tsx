@@ -17,11 +17,43 @@ export default function JobForm() {
   const [fuelPrice, setFuelPrice] = useState(1.5)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [useLocalStorage, setUseLocalStorage] = useState(false)
+  const [localJobs, setLocalJobs] = useState<Job[]>([])
+  const [localSites, setLocalSites] = useState<Site[]>([])
 
   useEffect(() => {
     getCurrentLocation()
+    testSupabaseConnection()
     fetchSites()
+    
+    // Load local data if available
+    const savedJobs = localStorage.getItem('logitrack-jobs')
+    const savedSites = localStorage.getItem('logitrack-sites')
+    if (savedJobs) setLocalJobs(JSON.parse(savedJobs))
+    if (savedSites) setLocalSites(JSON.parse(savedSites))
   }, [])
+
+  const testSupabaseConnection = async () => {
+    try {
+      console.log('Testing Supabase connection...')
+      const { data, error } = await supabase
+        .from('sites')
+        .select('count')
+        .limit(1)
+      
+      if (error) {
+        console.error('Supabase connection test failed:', error)
+        setMessage(`Database connection failed: ${error.message}`)
+        setUseLocalStorage(true) // Fallback to local storage
+      } else {
+        console.log('Supabase connection successful')
+      }
+    } catch (error) {
+      console.error('Supabase connection test error:', error)
+      setMessage(`Network error: ${error instanceof Error ? error.message : 'Failed to connect to database'}`)
+      setUseLocalStorage(true) // Fallback to local storage
+    }
+  }
 
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -51,6 +83,8 @@ export default function JobForm() {
       if (error) {
         console.error('Error fetching sites:', error)
         setMessage(`Error fetching sites: ${error.message}`)
+        // Use local storage as fallback
+        setNearbySites(localSites)
       } else {
         console.log('Sites fetched successfully:', data)
         setNearbySites(data || [])
@@ -58,6 +92,8 @@ export default function JobForm() {
     } catch (error) {
       console.error('Error fetching sites:', error)
       setMessage(`Error fetching sites: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      // Use local storage as fallback
+      setNearbySites(localSites)
     }
   }
 
@@ -88,27 +124,42 @@ export default function JobForm() {
       }
 
       const jobData = {
+        id: crypto.randomUUID(), // Generate local ID
         site_id: selectedSite?.id || null,
         start_time: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       }
       
       console.log('Inserting job data:', jobData)
 
-      const { data: job, error } = await supabase
-        .from('jobs')
-        .insert(jobData)
-        .select()
-        .single()
+      if (useLocalStorage) {
+        // Use local storage
+        const newJob = { ...jobData }
+        const updatedJobs = [...localJobs, newJob]
+        setLocalJobs(updatedJobs)
+        localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
+        
+        setCurrentJob(newJob)
+        setIsJobActive(true)
+        setMessage('Job started successfully! (Local mode)')
+      } else {
+        // Use Supabase
+        const { data: job, error } = await supabase
+          .from('jobs')
+          .insert(jobData)
+          .select()
+          .single()
 
-      if (error) {
-        console.error('Supabase error:', error)
-        throw error
+        if (error) {
+          console.error('Supabase error:', error)
+          throw error
+        }
+
+        console.log('Job created successfully:', job)
+        setCurrentJob(job)
+        setIsJobActive(true)
+        setMessage('Job started successfully!')
       }
-
-      console.log('Job created successfully:', job)
-      setCurrentJob(job)
-      setIsJobActive(true)
-      setMessage('Job started successfully!')
     } catch (error) {
       console.error('Error starting job:', error)
       setMessage(`Error starting job: ${error instanceof Error ? error.message : 'Unknown error'}`)

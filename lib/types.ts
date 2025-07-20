@@ -8,14 +8,14 @@ export interface Site {
 
 export interface Job {
   id: string
-  user_id: string
-  site_id: string
+  user_id?: string
+  site_id: string | null
   start_time: string
-  end_time: string | null
-  travel_km: number | null
-  travel_time: number | null
-  fuel_cost: number | null
-  work_summary: string | null
+  end_time?: string | null
+  travel_km?: number | null
+  travel_time?: number | null
+  fuel_cost?: number | null
+  work_summary?: string | null
   created_at: string
   site?: Site
 }
