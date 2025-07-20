@@ -42,6 +42,7 @@ export default function JobForm() {
 
   const fetchSites = async () => {
     try {
+      console.log('Fetching sites from Supabase...')
       const { data, error } = await supabase
         .from('sites')
         .select('*')
@@ -49,11 +50,14 @@ export default function JobForm() {
 
       if (error) {
         console.error('Error fetching sites:', error)
+        setMessage(`Error fetching sites: ${error.message}`)
       } else {
+        console.log('Sites fetched successfully:', data)
         setNearbySites(data || [])
       }
     } catch (error) {
       console.error('Error fetching sites:', error)
+      setMessage(`Error fetching sites: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -74,29 +78,40 @@ export default function JobForm() {
     setMessage('')
 
     try {
+      console.log('Starting job with location:', currentLocation)
+      
       const nearby = checkNearbySites(currentLocation.lat, currentLocation.lng)
+      console.log('Nearby sites:', nearby)
       
       if (nearby.length > 0) {
         setSelectedSite(nearby[0])
       }
 
+      const jobData = {
+        site_id: selectedSite?.id || null,
+        start_time: new Date().toISOString(),
+      }
+      
+      console.log('Inserting job data:', jobData)
+
       const { data: job, error } = await supabase
         .from('jobs')
-        .insert({
-          site_id: selectedSite?.id || null,
-          start_time: new Date().toISOString(),
-        })
+        .insert(jobData)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
 
+      console.log('Job created successfully:', job)
       setCurrentJob(job)
       setIsJobActive(true)
       setMessage('Job started successfully!')
     } catch (error) {
       console.error('Error starting job:', error)
-      setMessage('Error starting job. Please try again.')
+      setMessage(`Error starting job: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
