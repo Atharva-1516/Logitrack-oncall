@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { formatDate, formatTime } from '@/lib/utils'
-import { Job } from '@/lib/types'
+import { Job, Site } from '@/lib/types'
+import { formatTime, calculateWorkHours } from '@/lib/utils'
 
 export default function JobList() {
   const [jobs, setJobs] = useState<Job[]>([])
@@ -14,34 +13,38 @@ export default function JobList() {
     fetchJobs()
   }, [filter])
 
-  const fetchJobs = async () => {
+  const fetchJobs = () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('jobs')
-        .select(`
-          *,
-          site:sites(name)
-        `)
-        .order('created_at', { ascending: false })
-
+      // Get jobs from local storage
+      const savedJobs = localStorage.getItem('logitrack-jobs')
+      const allJobs: Job[] = savedJobs ? JSON.parse(savedJobs) : []
+      
       // Apply date filters
       const now = new Date()
+      let filteredJobs = allJobs
+
       if (filter === 'today') {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        query = query.gte('created_at', today.toISOString())
+        filteredJobs = allJobs.filter(job => 
+          new Date(job.created_at) >= today
+        )
       } else if (filter === 'week') {
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-        query = query.gte('created_at', weekAgo.toISOString())
+        filteredJobs = allJobs.filter(job => 
+          new Date(job.created_at) >= weekAgo
+        )
       } else if (filter === 'month') {
         const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
-        query = query.gte('created_at', monthAgo.toISOString())
+        filteredJobs = allJobs.filter(job => 
+          new Date(job.created_at) >= monthAgo
+        )
       }
 
-      const { data, error } = await query
-
-      if (error) throw error
-      setJobs(data || [])
+      // Sort by created_at descending
+      filteredJobs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      
+      setJobs(filteredJobs)
     } catch (error) {
       console.error('Error fetching jobs:', error)
     } finally {
@@ -49,17 +52,13 @@ export default function JobList() {
     }
   }
 
-  const deleteJob = async (jobId: string) => {
+  const deleteJob = (jobId: string) => {
     if (!confirm('Are you sure you want to delete this job?')) return
 
     try {
-      const { error } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('id', jobId)
-
-      if (error) throw error
-      fetchJobs()
+      const updatedJobs = jobs.filter(job => job.id !== jobId)
+      setJobs(updatedJobs)
+      localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
     } catch (error) {
       console.error('Error deleting job:', error)
     }
@@ -90,6 +89,14 @@ export default function JobList() {
       }
       return total
     }, 0)
+  }
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
   }
 
   if (loading) {

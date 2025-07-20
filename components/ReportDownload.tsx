@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { formatDate } from '@/lib/utils'
+import { useState } from 'react'
 import { Job } from '@/lib/types'
 import * as XLSX from 'xlsx'
 
@@ -12,31 +10,23 @@ export default function ReportDownload() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
-  useEffect(() => {
-    // Set default date range to current month
-    const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-    
-    setStartDate(firstDay.toISOString().split('T')[0])
-    setEndDate(lastDay.toISOString().split('T')[0])
-  }, [])
-
-  const fetchJobsForReport = async () => {
+  const fetchJobsForReport = () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select(`
-          *,
-          site:sites(name)
-        `)
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-      setJobs(data || [])
+      // Get jobs from local storage
+      const savedJobs = localStorage.getItem('logitrack-jobs')
+      const allJobs: Job[] = savedJobs ? JSON.parse(savedJobs) : []
+      
+      // Filter jobs by date range
+      const filteredJobs = allJobs.filter(job => {
+        const jobDate = new Date(job.created_at)
+        const start = startDate ? new Date(startDate) : new Date(0)
+        const end = endDate ? new Date(endDate + 'T23:59:59') : new Date()
+        
+        return jobDate >= start && jobDate <= end
+      })
+      
+      setJobs(filteredJobs)
     } catch (error) {
       console.error('Error fetching jobs for report:', error)
     } finally {
@@ -52,7 +42,7 @@ export default function ReportDownload() {
 
     // Prepare data for Excel
     const excelData = jobs.map(job => ({
-      'Date': formatDate(new Date(job.created_at)),
+      'Date': job.created_at ? new Date(job.created_at).toLocaleDateString() : '',
       'Start Time': job.start_time ? new Date(job.start_time).toLocaleTimeString() : '',
       'End Time': job.end_time ? new Date(job.end_time).toLocaleTimeString() : '',
       'Site Name': job.site?.name || 'Unknown Site',
