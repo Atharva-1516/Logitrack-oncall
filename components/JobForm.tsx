@@ -20,15 +20,18 @@ export default function JobForm() {
   const [localSites, setLocalSites] = useState<Site[]>([])
 
   useEffect(() => {
-    getCurrentLocation()
-    testLocalStorageConnection()
-    fetchSites()
-    
-    // Load local data if available
-    const savedJobs = localStorage.getItem('logitrack-jobs')
-    const savedSites = localStorage.getItem('logitrack-sites')
-    if (savedJobs) setLocalJobs(JSON.parse(savedJobs))
-    if (savedSites) setLocalSites(JSON.parse(savedSites))
+    // Only run on client side to prevent hydration issues
+    if (typeof window !== 'undefined') {
+      getCurrentLocation()
+      testLocalStorageConnection()
+      fetchSites()
+      
+      // Load local data if available
+      const savedJobs = localStorage.getItem('logitrack-jobs')
+      const savedSites = localStorage.getItem('logitrack-sites')
+      if (savedJobs) setLocalJobs(JSON.parse(savedJobs))
+      if (savedSites) setLocalSites(JSON.parse(savedSites))
+    }
   }, [])
 
   const testLocalStorageConnection = () => {

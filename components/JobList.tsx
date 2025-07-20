@@ -10,7 +10,9 @@ export default function JobList() {
   const [filter, setFilter] = useState('all') // all, today, week, month
 
   useEffect(() => {
-    fetchJobs()
+    if (typeof window !== 'undefined') {
+      fetchJobs()
+    }
   }, [filter])
 
   const fetchJobs = () => {
