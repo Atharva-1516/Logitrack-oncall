@@ -76,7 +76,19 @@ export default function ReportDownload() {
     }, {} as Record<string, Job[]>)
 
     // Prepare data for Excel matching the template format
-    const excelData: any[] = []
+    const excelData: {
+      Day: string
+      Date: string
+      'Time Start': string
+      'Time End': string
+      Hours: string
+      Customer: string
+      'Work Order': string
+      'Work Hours': string
+      'Train Hours': string
+      'Other Hours': string
+      Notes: string
+    }[] = []
     
     // Add header row
     excelData.push({
