@@ -100,7 +100,8 @@ export default function JobForm() {
   }
 
   const checkNearbySites = (lat: number, lng: number) => {
-    const allSites = useLocalStorage ? localSites : nearbySites
+    // Always use local sites since Supabase connection is failing
+    const allSites = localSites
     return allSites.filter(site => {
       const distance = calculateDistance(lat, lng, site.lat, site.lng)
       return distance <= 0.5 // 0.5 km radius
@@ -135,34 +136,15 @@ export default function JobForm() {
       
       console.log('Inserting job data:', jobData)
 
-      if (useLocalStorage) {
-        // Use local storage
-        const newJob = { ...jobData }
-        const updatedJobs = [...localJobs, newJob]
-        setLocalJobs(updatedJobs)
-        localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
-        
-        setCurrentJob(newJob)
-        setIsJobActive(true)
-        setMessage('Job started successfully! (Local mode)')
-      } else {
-        // Use Supabase
-        const { data: job, error } = await supabase
-          .from('jobs')
-          .insert(jobData)
-          .select()
-          .single()
-
-        if (error) {
-          console.error('Supabase error:', error)
-          throw error
-        }
-
-        console.log('Job created successfully:', job)
-        setCurrentJob(job)
-        setIsJobActive(true)
-        setMessage('Job started successfully!')
-      }
+      // Always use local storage for now since Supabase connection is failing
+      const newJob = { ...jobData }
+      const updatedJobs = [...localJobs, newJob]
+      setLocalJobs(updatedJobs)
+      localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
+      
+      setCurrentJob(newJob)
+      setIsJobActive(true)
+      setMessage('Job started successfully! (Local mode)')
     } catch (error) {
       console.error('Error starting job:', error)
       setMessage(`Error starting job: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -190,7 +172,10 @@ export default function JobForm() {
 
       const fuelCost = calculateFuelCost(travelKm, fuelEfficiency, fuelPrice)
 
-      if (useLocalStorage) {
+      // Check if we should use local storage (either explicitly set or if job has local ID format)
+      const shouldUseLocal = useLocalStorage || currentJob.id.includes('-')
+
+      if (shouldUseLocal) {
         // Update job in local storage
         const updatedJobs = localJobs.map(job => 
           job.id === currentJob.id 
@@ -256,36 +241,16 @@ export default function JobForm() {
         first_visited: new Date().toISOString(),
       }
 
-      if (useLocalStorage) {
-        // Create site in local storage
-        const newSite = { ...siteData }
-        const updatedSites = [newSite, ...localSites]
-        setLocalSites(updatedSites)
-        localStorage.setItem('logitrack-sites', JSON.stringify(updatedSites))
-        
-        setSelectedSite(newSite)
-        setNewSiteName('')
-        setNearbySites([newSite, ...nearbySites])
-        setMessage('New site created successfully! (Local mode)')
-      } else {
-        // Use Supabase
-        const { data: site, error } = await supabase
-          .from('sites')
-          .insert({
-            name: newSiteName,
-            lat: currentLocation.lat,
-            lng: currentLocation.lng,
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-
-        setSelectedSite(site)
-        setNewSiteName('')
-        setNearbySites([site, ...nearbySites])
-        setMessage('New site created successfully!')
-      }
+      // Always use local storage for now since Supabase connection is failing
+      const newSite = { ...siteData }
+      const updatedSites = [newSite, ...localSites]
+      setLocalSites(updatedSites)
+      localStorage.setItem('logitrack-sites', JSON.stringify(updatedSites))
+      
+      setSelectedSite(newSite)
+      setNewSiteName('')
+      setNearbySites([newSite, ...nearbySites])
+      setMessage('New site created successfully! (Local mode)')
     } catch (error) {
       console.error('Error creating site:', error)
       setMessage(`Error creating site: ${error instanceof Error ? error.message : 'Unknown error'}`)
