@@ -85,6 +85,7 @@ export default function JobForm() {
         setMessage(`Error fetching sites: ${error.message}`)
         // Use local storage as fallback
         setNearbySites(localSites)
+        setUseLocalStorage(true)
       } else {
         console.log('Sites fetched successfully:', data)
         setNearbySites(data || [])
@@ -94,11 +95,13 @@ export default function JobForm() {
       setMessage(`Error fetching sites: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // Use local storage as fallback
       setNearbySites(localSites)
+      setUseLocalStorage(true)
     }
   }
 
   const checkNearbySites = (lat: number, lng: number) => {
-    return nearbySites.filter(site => {
+    const allSites = useLocalStorage ? localSites : nearbySites
+    return allSites.filter(site => {
       const distance = calculateDistance(lat, lng, site.lat, site.lng)
       return distance <= 0.5 // 0.5 km radius
     })
@@ -187,27 +190,52 @@ export default function JobForm() {
 
       const fuelCost = calculateFuelCost(travelKm, fuelEfficiency, fuelPrice)
 
-      const { error } = await supabase
-        .from('jobs')
-        .update({
-          end_time: endTime.toISOString(),
-          travel_km: travelKm,
-          travel_time: workHours,
-          fuel_cost: fuelCost,
-          work_summary: workSummary,
-        })
-        .eq('id', currentJob.id)
+      if (useLocalStorage) {
+        // Update job in local storage
+        const updatedJobs = localJobs.map(job => 
+          job.id === currentJob.id 
+            ? {
+                ...job,
+                end_time: endTime.toISOString(),
+                travel_km: travelKm,
+                travel_time: workHours,
+                fuel_cost: fuelCost,
+                work_summary: workSummary,
+              }
+            : job
+        )
+        setLocalJobs(updatedJobs)
+        localStorage.setItem('logitrack-jobs', JSON.stringify(updatedJobs))
+        
+        setIsJobActive(false)
+        setCurrentJob(null)
+        setSelectedSite(null)
+        setWorkSummary('')
+        setMessage('Job ended successfully! (Local mode)')
+      } else {
+        // Use Supabase
+        const { error } = await supabase
+          .from('jobs')
+          .update({
+            end_time: endTime.toISOString(),
+            travel_km: travelKm,
+            travel_time: workHours,
+            fuel_cost: fuelCost,
+            work_summary: workSummary,
+          })
+          .eq('id', currentJob.id)
 
-      if (error) throw error
+        if (error) throw error
 
-      setIsJobActive(false)
-      setCurrentJob(null)
-      setSelectedSite(null)
-      setWorkSummary('')
-      setMessage('Job ended successfully!')
+        setIsJobActive(false)
+        setCurrentJob(null)
+        setSelectedSite(null)
+        setWorkSummary('')
+        setMessage('Job ended successfully!')
+      }
     } catch (error) {
       console.error('Error ending job:', error)
-      setMessage('Error ending job. Please try again.')
+      setMessage(`Error ending job: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -220,25 +248,47 @@ export default function JobForm() {
     setMessage('')
 
     try {
-      const { data: site, error } = await supabase
-        .from('sites')
-        .insert({
-          name: newSiteName,
-          lat: currentLocation.lat,
-          lng: currentLocation.lng,
-        })
-        .select()
-        .single()
+      const siteData = {
+        id: crypto.randomUUID(),
+        name: newSiteName,
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+        first_visited: new Date().toISOString(),
+      }
 
-      if (error) throw error
+      if (useLocalStorage) {
+        // Create site in local storage
+        const newSite = { ...siteData }
+        const updatedSites = [newSite, ...localSites]
+        setLocalSites(updatedSites)
+        localStorage.setItem('logitrack-sites', JSON.stringify(updatedSites))
+        
+        setSelectedSite(newSite)
+        setNewSiteName('')
+        setNearbySites([newSite, ...nearbySites])
+        setMessage('New site created successfully! (Local mode)')
+      } else {
+        // Use Supabase
+        const { data: site, error } = await supabase
+          .from('sites')
+          .insert({
+            name: newSiteName,
+            lat: currentLocation.lat,
+            lng: currentLocation.lng,
+          })
+          .select()
+          .single()
 
-      setSelectedSite(site)
-      setNewSiteName('')
-      setNearbySites([site, ...nearbySites])
-      setMessage('New site created successfully!')
+        if (error) throw error
+
+        setSelectedSite(site)
+        setNewSiteName('')
+        setNearbySites([site, ...nearbySites])
+        setMessage('New site created successfully!')
+      }
     } catch (error) {
       console.error('Error creating site:', error)
-      setMessage('Error creating site. Please try again.')
+      setMessage(`Error creating site: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
